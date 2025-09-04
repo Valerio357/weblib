@@ -373,7 +373,7 @@ WebLib is released under the **Apache 2.0 License**. See [LICENSE](LICENSE) file
 ## 🚀 Ready to revolutionize your web development?
 
 ```bash
-pip install weblib
+pip install weblib-py
 ```
 
 **Made with ❤️ and Python | © 2025 WebLib**
