@@ -54,6 +54,11 @@ class WebApp:
             
             return flask_response
     
+    def set_static_folder(self, path: str):
+        """Imposta la cartella per i file statici"""
+        self.static_folder = path
+        self.flask_app.static_folder = path
+    
     def add_middleware(self, middleware: Callable):
         """Aggiunge un middleware"""
         self.middleware.append(middleware)

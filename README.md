@@ -64,7 +64,6 @@ Your app adapts automatically - same Python code, different visual results!
 
 Seamlessly switch between databases without code changes:
 
-```python
 # Development
 db = get_db('sqlite:///dev.db')
 
@@ -238,7 +237,7 @@ def analytics(request):
 
 ```bash
 # Install WebLib
-pip install weblib
+pip install weblib-py
 
 # Create new project
 mkdir my-web-app
@@ -310,25 +309,6 @@ def live_updates(websocket):
         time.sleep(1)
 ```
 
-## 🧪 Testing
-
-WebLib includes testing utilities:
-
-```python
-from weblib.testing import WebLibTestClient
-
-def test_home_page():
-    client = WebLibTestClient(app)
-    response = client.get('/')
-    assert response.status_code == 200
-    assert "Welcome" in response.data
-
-def test_api_endpoint():
-    client = WebLibTestClient(app)
-    response = client.post('/api/users', json={"name": "John"})
-    assert response.json["success"] == True
-```
-
 ## 📚 Documentation
 
 - **📖 Full Documentation**: [docs.weblib.dev](https://docs.weblib.dev)
@@ -369,10 +349,7 @@ python examples/landing_page.py
 
 ## 🌟 Community & Support
 
-- **💬 Discord Community**: [discord.gg/weblib](https://discord.gg/weblib)
-- **🐛 Issue Tracker**: [GitHub Issues](https://github.com/weblib/weblib/issues)
-- **💌 Email**: hello@weblib.dev
-- **🐦 Twitter**: [@weblib_dev](https://twitter.com/weblib_dev)
+- **💌 Email**: valeriodomenici93@gmail.com
 
 ## 📋 Roadmap
 
@@ -389,7 +366,7 @@ python examples/landing_page.py
 
 ## ⚖️ License
 
-WebLib is released under the **MIT License**. See [LICENSE](LICENSE) file for details.
+WebLib is released under the **Apache 2.0 License**. See [LICENSE](LICENSE) file for details.
 
 ---
 

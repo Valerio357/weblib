@@ -1,24 +1,21 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="weblib",
-    version="0.1.0",
-    description="Una libreria Python semplice per creare webapp",
-    author="Valerio",
-    packages=find_packages(),
-    python_requires=">=3.6",
-    install_requires=[
-        "Flask>=2.0.0",
-    ],
+    name="weblib-py",  # o il nuovo nome che scegli
+    version="0.1.3",
+    author="Valerio Domenici",
+    author_email="valeriodomenici93@gmail.com",
+    description="The Python library that revolutionizes web development",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
+    url="https://github.com/Valerio357/weblib",
+    license="Apache License 2.0",
     classifiers=[
-        "Development Status :: 3 - Alpha",
-        "Intended Audience :: Developers",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
+        "Operating System :: OS Independent",
     ],
+    packages=find_packages(),
+    python_requires=">=3.7",
 )
+
