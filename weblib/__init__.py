@@ -4,14 +4,14 @@ Libreria completa con componenti, forms, auth, database e charts
 Supporto multi-framework CSS: Bootstrap, Tailwind, Bulma
 """
 
+# Basic imports
 from .html import *
-from .app import WebApp
+from .app import WebApp, PageBuilder
 from .routing import Router, Request, Response
 from .config import Config
-from .charts import (
-    ChartJS, PlotlyJS, ApexCharts, ChartBuilder, ChartPage,
-    quick_line_chart, quick_bar_chart, quick_pie_chart, SAMPLE_DATA
-)
+
+# Database ORM
+from .orm import Database, Model, QuerySet, Field
 
 # Framework CSS Multi-Support
 from .css_frameworks import (
@@ -19,9 +19,11 @@ from .css_frameworks import (
     FrameworkManager, DEFAULT_FRAMEWORK
 )
 
-# Database Multi-Support  
-from .multi_database import DatabaseManager, DatabaseAdapter, get_database_config, build_connection_string
-from .database_v2 import Database, Model, QuerySet, get_db, Field, CharField, TextField, IntegerField, FloatField, BooleanField, DateTimeField, JSONField, DatabaseError
+# Charts
+from .charts import (
+    ChartJS, PlotlyJS, ApexCharts, ChartBuilder, ChartPage,
+    quick_line_chart, quick_bar_chart, quick_pie_chart, SAMPLE_DATA
+)
 
 # Nuove funzionalità v2.0
 from .components import *
@@ -35,18 +37,7 @@ __author__ = "WebLib Team"
 _current_framework = DEFAULT_FRAMEWORK
 
 def set_css_framework(framework_name: str):
-    """Imposta il framework CSS attivo
-    
-    Args:
-        framework_name: Nome del framework ('bootstrap', 'tailwind', 'bulma')
-        
-    Returns:
-        Istanza del framework CSS
-        
-    Example:
-        >>> set_css_framework('tailwind')
-        >>> app.page.add_css(get_css_framework().cdn_css)
-    """
+    """Imposta il framework CSS attivo"""
     global _current_framework
     _current_framework = FrameworkManager.get_framework(framework_name)
     return _current_framework
@@ -183,7 +174,6 @@ class CSSClasses:
 # Istanza globale delle classi CSS
 CSS = CSSClasses()
 
-__version__ = "2.0.0"
 __all__ = [
     # App principale
     'WebApp',
@@ -194,7 +184,6 @@ __all__ = [
     # Configurazione
     'Config',
     'CSSClasses',
-    'FormValidator',
     
     # CSS Framework functions
     'set_css_framework',
@@ -219,23 +208,6 @@ __all__ = [
     'Ul', 'Ol', 'Li', 'Table', 'Tr', 'Td', 'Th', 'Thead', 'Tbody',
     'Nav', 'Header', 'Footer', 'Section', 'Article', 'Aside', 'Main', 'I', 'Hr',
     
-    # Componenti riutilizzabili
-    'Component', 'Card', 'Alert', 'NavBar', 'Modal', 'Breadcrumb',
-    'Pagination', 'Badge', 'component', 'get_component', 'list_components',
-    
-    # Form validation
-    'Field', 'StringField', 'EmailField', 'NumberField', 'SelectField',
-    'TextAreaField', 'FormValidator', 'ValidationError', 'min_length',
-    'max_length', 'email_validator', 'phone_validator', 'url_validator',
-    'custom_validator',
-    
-    # Authentication & sessions
-    'Session', 'SessionStore', 'User', 'AuthManager', 'AuthMiddleware',
-    'login_required', 'permission_required', 'admin_required',
-    'create_login_form', 'create_register_form',
-    
     # Database ORM
-    'Database', 'Model', 'QuerySet', 'Field', 'CharField', 'TextField',
-    'IntegerField', 'FloatField', 'BooleanField', 'DateTimeField', 'JSONField',
-    'DatabaseError', 'get_db'
+    'Database', 'Model', 'QuerySet', 'Field'
 ]

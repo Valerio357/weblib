@@ -345,11 +345,16 @@ def quick_line_chart(chart_id: str, labels: List[str], data: List[float],
                     label: str = "Dataset", color: str = "#36A2EB") -> ChartJS:
     """Crea rapidamente un grafico a linee"""
     chart = ChartJS(chart_id)
+    
+    # Aggiungi trasparenza al colore in modo sicuro con f-string
+    # Evita di usare operazioni di stringa che potrebbero causare problemi
+    background_color = f"{color}20"  # Aggiunge "20" al colore per trasparenza
+    
     dataset = {
         "label": label,
         "data": data,
         "borderColor": color,
-        "backgroundColor": color + "20",  # Colore con trasparenza
+        "backgroundColor": background_color,
         "fill": False
     }
     return chart.line_chart(labels, [dataset])

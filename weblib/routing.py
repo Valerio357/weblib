@@ -43,13 +43,16 @@ class Request:
     
     def __init__(self, method: str, path: str, query_string: str = "", 
                  headers: Optional[Dict[str, str]] = None, 
-                 form_data: Optional[Dict[str, Any]] = None):
+                 form_data: Optional[Dict[str, Any]] = None,
+                 cookies: Optional[Dict[str, str]] = None):
         self.method = method
         self.path = path
         self.query_string = query_string
         self.headers = headers or {}
         self.form_data = form_data or {}
+        self.cookies = cookies or {}
         self.args = self._parse_query_string(query_string)
+        self.state = type('State', (), {})  # For storing arbitrary data during request processing
         
     def _parse_query_string(self, query_string: str) -> Dict[str, str]:
         """Analizza la query string e restituisce un dizionario"""
@@ -70,6 +73,7 @@ class Response:
         self.status_code = status_code
         self.headers = headers or {}
         self.headers.setdefault('Content-Type', content_type)
+        self.cookies = []
     
     def set_header(self, name: str, value: str) -> 'Response':
         """Imposta un header della risposta"""
@@ -80,6 +84,28 @@ class Response:
         """Imposta lo status code"""
         self.status_code = status_code
         return self
+    
+    def set_cookie(self, key: str, value: str, max_age: int = None, 
+                   expires: int = None, path: str = "/", domain: str = None, 
+                   secure: bool = False, httponly: bool = False, 
+                   samesite: str = "lax") -> 'Response':
+        """Set a cookie in the response"""
+        self.cookies.append({
+            'key': key,
+            'value': value,
+            'max_age': max_age,
+            'expires': expires,
+            'path': path,
+            'domain': domain,
+            'secure': secure,
+            'httponly': httponly,
+            'samesite': samesite
+        })
+        return self
+    
+    def delete_cookie(self, key: str, path: str = "/", domain: str = None) -> 'Response':
+        """Delete a cookie by setting its expiry in the past"""
+        return self.set_cookie(key, "", max_age=0, expires=0, path=path, domain=domain)
 
 
 class Router:

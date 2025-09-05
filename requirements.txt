@@ -1,1 +1,14 @@
-Flask>=2.0.0
+starlette
+uvicorn
+websockets
+python-multipart
+sqlalchemy
+psycopg2-binary
+psycopg2-binary
+uvicorn
+starlette
+passlib
+python-jose
+bcrypt
+sqlalchemy
+requests

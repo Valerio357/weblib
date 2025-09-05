@@ -7,21 +7,24 @@ from typing import List, Dict, Any, Union, Optional
 
 class HtmlElement:
     """Classe base per tutti gli elementi HTML"""
-    
-    def __init__(self, tag: str, content: Union[str, List['HtmlElement'], None] = None, 
-                 classes: Optional[List[str]] = None, **attributes):
+    # html.py — HtmlElement.__init__
+    def __init__(self, tag: str, content=None, classes=None, **attributes):
         self.tag = tag
-        self.content = content or []
+        # ✅ normalizza sempre le classi
+        if isinstance(classes, str):
+            classes = classes.split()
         self.classes = classes or []
         self.attributes = attributes
-        
-        # Se il content è una stringa, la manteniamo così
+
+        # contenuto
         if isinstance(content, str):
             self.content = content
         elif content is None:
             self.content = []
         else:
             self.content = content if isinstance(content, list) else [content]
+
+
     
     def add_class(self, class_name: str) -> 'HtmlElement':
         """Aggiunge una classe CSS all'elemento"""
@@ -87,14 +90,21 @@ class HtmlElement:
                 return f"{indent_str}<{self.tag}{attr_str}>{content_str}</{self.tag}>"
         
         elif isinstance(self.content, list) and self.content:
-            # Lista di elementi figli
             child_strs = []
             for child in self.content:
-                if isinstance(child, HtmlElement):
+                # ✅ se il figlio ha un metodo render() ed è *non* già un HtmlElement, chiamalo
+                if hasattr(child, "render") and callable(getattr(child, "render")) \
+                and not isinstance(child, HtmlElement):
+                    rendered = child.render()
+                    if isinstance(rendered, HtmlElement):
+                        child_strs.append(rendered.render(indent + 1))
+                    else:
+                        child_strs.append(f"{indent_str}  {str(rendered)}")
+                elif isinstance(child, HtmlElement):
                     child_strs.append(child.render(indent + 1))
                 else:
                     child_strs.append(f"{indent_str}  {str(child)}")
-            
+
             content_str = f"\n" + "\n".join(child_strs) + f"\n{indent_str}"
         else:
             # Nessun contenuto

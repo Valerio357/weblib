@@ -14,6 +14,9 @@ WebLib is a powerful Python library for building modern web applications with a 
 - **🔄 Framework Agnostic**: Switch CSS frameworks without changing code. Same Python, completely different styles
 - **💾 Database Flexibility**: Develop with SQLite, deploy with PostgreSQL. ZERO code changes
 - **📊 Built-in Data Visualization**: Charts with one line - no external libraries needed
+- **🔄 Real-Time Interactivity**: Built-in WebSocket support with server-side component model
+- **⚡ ASGI-powered**: High-performance async core for modern web requirements
+- **🔐 Enterprise-grade Security**: JWT authentication with secure cookies (HttpOnly, SameSite, Secure)
 
 ## 🚀 Quick Start
 
@@ -35,7 +38,9 @@ def home(request):
         quick_line_chart("Sales", ["Jan", "Feb", "Mar"], [100, 150, 200])
     ]).render()
 
-app.run()
+# Run ASGI server
+if __name__ == "__main__":
+    app.run()
 ```
 
 ## 💻 Live Demo
@@ -44,6 +49,7 @@ Check out our examples:
 - **🌐 Landing Page**: Professional marketing page showcasing WebLib features
 - **🛍️ E-commerce Demo**: Full shopping cart with products, categories, and admin panel
 - **📊 Dashboard**: Analytics dashboard with charts and metrics
+- **🌟 Social Network**: Complete social media platform with authentication, posts, and real-time updates
 
 ## 🎨 Multi-Framework CSS Support
 
@@ -209,12 +215,12 @@ def analytics(request):
 
 ## 🆚 Comparison with Other Frameworks
 
-| Framework | Setup Time | Code Lines | Full Stack | Learning Curve | Maintenance |
-|-----------|------------|------------|------------|----------------|-------------|
-| **WebLib** | 30 seconds | **-70%** | ✅ Built-in | 1 week | 🟢 Low |
-| Flask + Bootstrap | 15 minutes | Baseline | ❌ Manual | 1 month | 🟡 Medium |
-| Django | 45 minutes | +150% | ✅ Monolithic | 3 months | 🔴 High |
-| FastAPI + React | 2+ hours | +200% | ❌ Split stack | 6+ months | 🔴 Very High |
+| Framework | Setup Time | Code Lines | Full Stack | Learning Curve | Maintenance | Async Support |
+|-----------|------------|------------|------------|----------------|-------------|--------------|
+| **WebLib** | 30 seconds | **-70%** | ✅ Built-in | 1 week | 🟢 Low | ✅ ASGI |
+| Flask + Bootstrap | 15 minutes | Baseline | ❌ Manual | 1 month | 🟡 Medium | ❌ WSGI only |
+| Django | 45 minutes | +150% | ✅ Monolithic | 3 months | 🔴 High | ❌ WSGI only |
+| FastAPI + React | 2+ hours | +200% | ❌ Split stack | 6+ months | 🔴 Very High | ✅ ASGI |
 
 ## 🎯 Perfect Use Cases
 
@@ -224,6 +230,7 @@ def analytics(request):
 - **🎓 Education**: Teaching web development concepts
 - **🔧 Automation**: Web UIs for Python scripts
 - **👥 Small Teams**: 1-5 Python developers
+- **⚡ Real-time Apps**: Interactive dashboards, live updates, and collaborative tools
 
 ## 📈 Measurable ROI
 
@@ -285,28 +292,76 @@ user_grid = Row([
 ])
 ```
 
-### API Integration
+### ORM Integration
 ```python
-@app.get('/api/users')
-def api_users(request):
-    return {"users": User.objects.all().to_dict()}
+# Define your models
+class User(Model):
+    name = Field(str)
+    email = Field(str, unique=True)
+    is_active = Field(bool, default=True)
+    
+    def __str__(self):
+        return f"{self.name} <{self.email}>"
 
-@app.post('/api/users')  
-def create_user(request):
-    user_data = request.json_data
-    user = User.create(**user_data)
-    return {"success": True, "user_id": user.id}
+# Use the unified ORM
+db = Database("sqlite:///app.db")
+db.create_tables([User])
+
+# Create, query, and manipulate data
+user = User.objects.create(name="John Doe", email="john@example.com")
+active_users = User.objects.filter(is_active=True).all()
+inactive_count = User.objects.filter(is_active=False).count()
+
+# Works with any supported database engine with no code changes
 ```
 
-### Real-time Updates
+### Authentication System
 ```python
-# WebSocket support built-in
-@app.websocket('/live-updates')
-def live_updates(websocket):
-    while True:
-        data = get_live_data()
-        websocket.send(data)
-        time.sleep(1)
+# Initialize authentication
+auth = AuthManager(app, db, user_model=User)
+
+# Create login routes
+auth.setup_routes()
+
+# Protect your routes
+@app.get('/dashboard')
+@auth.require_auth
+def dashboard(request):
+    user = auth.get_current_user(request)
+    return Div([
+        H1(f"Welcome {user.name}!"),
+        # Dashboard content
+    ]).render()
+
+# OAuth2 integration
+auth.add_oauth_provider('google', client_id, client_secret)
+```
+
+### Real-time Components
+```python
+# Live counter component with automatic state management
+class CounterComponent(LiveComponent):
+    def __init__(self, initial_count=0):
+        super().__init__()
+        self.count = initial_count
+    
+    def increment(self):
+        self.count += 1
+        # Automatic HTML diffing and patching
+    
+    def render(self):
+        return Div([
+            H3(f"Count: {self.count}"),
+            Button("Increment", onclick=self.increment)
+        ])
+
+# Use in your routes
+@app.get('/counter')
+def counter_page(request):
+    return Div([
+        H1("Live Counter Example"),
+        CounterComponent(initial_count=0)
+    ]).render()
 ```
 
 ## 📚 Documentation
@@ -315,6 +370,7 @@ def live_updates(websocket):
 - **🎯 API Reference**: [api.weblib.dev](https://api.weblib.dev)
 - **💡 Examples**: [examples.weblib.dev](https://examples.weblib.dev)
 - **🎥 Video Tutorials**: [learn.weblib.dev](https://learn.weblib.dev)
+- **🧑‍💻 Component Library**: See `/docs` folder for comprehensive documentation
 
 ## 🤝 Contributing
 
@@ -345,6 +401,7 @@ pytest
 # Run examples
 python examples/shop_demo.py
 python examples/landing_page.py
+python examples/social_network_demo.py  # Social media platform demo
 ```
 
 ## 🌟 Community & Support
@@ -358,8 +415,10 @@ python examples/landing_page.py
 - [x] Built-in authentication
 - [x] Chart generation
 - [x] WebSocket support
+- [x] ASGI implementation
+- [x] Server-side component model
+- [x] Secure cookie handling
 - [ ] Real-time collaboration features
-- [ ] Mobile app generation
 - [ ] AI-assisted component creation
 - [ ] Plugin system
 - [ ] Cloud deployment tools

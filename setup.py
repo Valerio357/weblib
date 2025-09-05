@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="weblib-py",  # o il nuovo nome che scegli
-    version="0.1.3",
+    version="0.1.4",
     author="Valerio Domenici",
     author_email="valeriodomenici93@gmail.com",
     description="The Python library that revolutionizes web development",

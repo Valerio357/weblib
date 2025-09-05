@@ -1,373 +1,412 @@
 """
-Sistema di Session Management e Autenticazione per WebLib
+Authentication and security module for WebLib.
+Provides utilities for secure password handling, JWT-based sessions,
+and authentication management with secure, HttpOnly cookies.
 """
 
-import json
-import hashlib
 import secrets
 import time
-from typing import Dict, Any, Optional, Callable
-from functools import wraps
-from .routing import Request, Response
+from typing import Optional, Dict, Any, Callable, Union
+from datetime import datetime, timedelta
+import functools
 
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from starlette.requests import Request
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
 
-class Session:
-    """Classe per gestire le sessioni utente"""
-    
-    def __init__(self, session_id: str = None):
-        self.session_id = session_id or self._generate_session_id()
-        self.data = {}
-        self.created_at = time.time()
-        self.last_accessed = time.time()
-        self.is_new = True
-    
-    def _generate_session_id(self) -> str:
-        """Genera un ID sessione sicuro"""
-        return secrets.token_urlsafe(32)
-    
-    def get(self, key: str, default=None):
-        """Ottiene un valore dalla sessione"""
-        self.last_accessed = time.time()
-        return self.data.get(key, default)
-    
-    def set(self, key: str, value: Any):
-        """Imposta un valore nella sessione"""
-        self.data[key] = value
-        self.last_accessed = time.time()
-    
-    def delete(self, key: str):
-        """Rimuove un valore dalla sessione"""
-        if key in self.data:
-            del self.data[key]
-        self.last_accessed = time.time()
-    
-    def clear(self):
-        """Cancella tutti i dati della sessione"""
-        self.data.clear()
-        self.last_accessed = time.time()
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Converte la sessione in dizionario per serializzazione"""
-        return {
-            'session_id': self.session_id,
-            'data': self.data,
-            'created_at': self.created_at,
-            'last_accessed': self.last_accessed
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Session':
-        """Crea una sessione da dizionario"""
-        session = cls(data['session_id'])
-        session.data = data.get('data', {})
-        session.created_at = data.get('created_at', time.time())
-        session.last_accessed = data.get('last_accessed', time.time())
-        session.is_new = False
-        return session
+from .orm import BaseModel
 
-
-class SessionStore:
-    """Store per le sessioni (implementazione in memoria)"""
-    
-    def __init__(self, max_age: int = 3600):  # 1 ora default
-        self.sessions = {}
-        self.max_age = max_age
-    
-    def get(self, session_id: str) -> Optional[Session]:
-        """Ottiene una sessione"""
-        if session_id in self.sessions:
-            session = self.sessions[session_id]
-            # Controlla scadenza
-            if time.time() - session.last_accessed > self.max_age:
-                del self.sessions[session_id]
-                return None
-            return session
-        return None
-    
-    def save(self, session: Session):
-        """Salva una sessione"""
-        self.sessions[session.session_id] = session
-    
-    def delete(self, session_id: str):
-        """Cancella una sessione"""
-        if session_id in self.sessions:
-            del self.sessions[session_id]
-    
-    def cleanup(self):
-        """Rimuove le sessioni scadute"""
-        current_time = time.time()
-        expired_sessions = [
-            sid for sid, session in self.sessions.items()
-            if current_time - session.last_accessed > self.max_age
-        ]
-        for sid in expired_sessions:
-            del self.sessions[sid]
-
-
-class User:
-    """Classe base per rappresentare un utente"""
-    
-    def __init__(self, user_id: str, username: str, email: str = None, **kwargs):
-        self.user_id = user_id
-        self.username = username
-        self.email = email
-        self.data = kwargs
-        self.is_authenticated = True
-    
-    def get(self, key: str, default=None):
-        """Ottiene un attributo utente"""
-        return self.data.get(key, default)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Converte l'utente in dizionario"""
-        return {
-            'user_id': self.user_id,
-            'username': self.username,
-            'email': self.email,
-            'data': self.data
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'User':
-        """Crea un utente da dizionario"""
-        return cls(
-            user_id=data['user_id'],
-            username=data['username'],
-            email=data.get('email'),
-            **data.get('data', {})
-        )
-
+# --- Security Configuration ---
 
 class AuthManager:
-    """Gestore dell'autenticazione"""
+    """
+    Manages authentication settings and utilities.
+    """
+    def __init__(self, secret_key: str = None, token_expiration_minutes: int = 60 * 24 * 7):
+        """
+        Initialize the authentication manager.
+        
+        Args:
+            secret_key: A secret key for signing JWTs. If not provided, a random one is generated.
+            token_expiration_minutes: How long tokens are valid for, in minutes. Default is 7 days.
+        """
+        self.secret_key = secret_key or secrets.token_hex(32)
+        self.token_expiration_minutes = token_expiration_minutes
+        self.algorithm = "HS256"
+        self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        self.user_model = None
+        
+    def set_user_model(self, model_class: type):
+        """Set the user model class that will be used for authentication."""
+        self.user_model = model_class
+        return self
     
-    def __init__(self):
-        self.users = {}  # user_id -> User
-        self.credentials = {}  # username -> password_hash
+    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+        """Verify that a plain password matches the hashed version."""
+        return self.pwd_context.verify(plain_password, hashed_password)
     
-    def hash_password(self, password: str) -> str:
-        """Crea hash della password"""
-        salt = secrets.token_hex(16)
-        pwd_hash = hashlib.pbkdf2_hmac('sha256', 
-                                      password.encode('utf-8'), 
-                                      salt.encode('utf-8'), 
-                                      100000)
-        return f"{salt}:{pwd_hash.hex()}"
+    def get_password_hash(self, password: str) -> str:
+        """Generate a secure hash of the password."""
+        return self.pwd_context.hash(password)
     
-    def verify_password(self, password: str, password_hash: str) -> bool:
-        """Verifica password contro hash"""
-        try:
-            salt, pwd_hash = password_hash.split(':')
-            return pwd_hash == hashlib.pbkdf2_hmac('sha256',
-                                                   password.encode('utf-8'),
-                                                   salt.encode('utf-8'),
-                                                   100000).hex()
-        except:
-            return False
+    def create_access_token(self, data: Dict[str, Any]) -> str:
+        """
+        Create a new JWT access token with the provided data.
+        
+        Args:
+            data: The payload data to include in the token.
+        
+        Returns:
+            The encoded JWT token.
+        """
+        to_encode = data.copy()
+        expires_delta = timedelta(minutes=self.token_expiration_minutes)
+        expire = datetime.utcnow() + expires_delta
+        to_encode.update({"exp": expire})
+        
+        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
     
-    def register_user(self, username: str, password: str, email: str = None, **kwargs) -> User:
-        """Registra un nuovo utente"""
-        if username in self.credentials:
-            raise ValueError("Username already exists")
+    def decode_access_token(self, token: str) -> Dict[str, Any]:
+        """
+        Decode and validate a JWT access token.
         
-        user_id = secrets.token_urlsafe(16)
-        user = User(user_id, username, email, **kwargs)
-        
-        self.users[user_id] = user
-        self.credentials[username] = self.hash_password(password)
-        
-        return user
-    
-    def authenticate(self, username: str, password: str) -> Optional[User]:
-        """Autentica un utente"""
-        if username not in self.credentials:
-            return None
-        
-        password_hash = self.credentials[username]
-        if not self.verify_password(password, password_hash):
-            return None
-        
-        # Trova l'utente
-        for user in self.users.values():
-            if user.username == username:
-                return user
-        
-        return None
-    
-    def get_user(self, user_id: str) -> Optional[User]:
-        """Ottiene un utente per ID"""
-        return self.users.get(user_id)
-
-
-class AuthMiddleware:
-    """Middleware per gestire autenticazione e sessioni"""
-    
-    def __init__(self, session_store: SessionStore = None, auth_manager: AuthManager = None):
-        self.session_store = session_store or SessionStore()
-        self.auth_manager = auth_manager or AuthManager()
-        self.cookie_name = 'weblib_session'
-    
-    def process_request(self, request: Request) -> Request:
-        """Processa la richiesta aggiungendo sessione e utente"""
-        # Ottieni session ID dai cookie
-        session_id = self._get_session_id_from_cookies(request)
-        
-        # Carica o crea sessione
-        if session_id:
-            session = self.session_store.get(session_id)
-        else:
-            session = None
-        
-        if not session:
-            session = Session()
-            session.is_new = True
-        
-        request.session = session
-        
-        # Carica utente se autenticato
-        user_id = session.get('user_id')
-        if user_id:
-            user = self.auth_manager.get_user(user_id)
-            request.user = user
-        else:
-            request.user = None
-        
-        return request
-    
-    def process_response(self, request: Request, response: Response) -> Response:
-        """Processa la risposta salvando sessione e cookie"""
-        if hasattr(request, 'session'):
-            # Salva sessione
-            self.session_store.save(request.session)
+        Args:
+            token: The JWT token to decode.
             
-            # Imposta cookie se nuova sessione o modificata
-            if request.session.is_new or request.session.data:
-                self._set_session_cookie(response, request.session.session_id)
+        Returns:
+            The decoded token payload.
+            
+        Raises:
+            JWTError: If the token is invalid or expired.
+        """
+        try:
+            # Print debugging info
+            print(f"Decoding token with secret key: {self.secret_key[:5]}...")
+            
+            # Decode the token
+            return jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+        except JWTError as e:
+            print(f"JWT decode error: {str(e)}")
+            raise
+
+    def set_auth_cookie(self, response, user_id: Union[str, int]) -> None:
+        """
+        Set a secure authentication cookie on a response.
         
+        Args:
+            response: The response object to set the cookie on.
+            user_id: The ID of the authenticated user.
+        """
+        token = self.create_access_token({"sub": str(user_id)})
+        
+        # Set cookie with secure attributes
+        response.set_cookie(
+            key="access_token",
+            value=token,
+            httponly=True,       # Inaccessible to JavaScript
+            secure=True,         # Sent only over HTTPS
+            samesite="lax",      # Protects against CSRF
+            max_age=self.token_expiration_minutes * 60
+        )
+        
+    def clear_auth_cookie(self, response) -> None:
+        """
+        Clear the authentication cookie from a response.
+        
+        Args:
+            response: The response object to clear the cookie from.
+        """
+        response.delete_cookie(key="access_token")
+    
+    def login(self, request, user) -> None:
+        """
+        Log a user in by setting the auth cookie on the response.
+        
+        Args:
+            request: The request object.
+            user: The user object to log in.
+        """
+        from .routing import Response
+        # Create a token
+        token = self.create_access_token({"sub": str(user.id)})
+        print(f"Generated token for user {user.id}: {token[:20]}...")
+        
+        # Create a response object
+        response = Response("", status_code=200)
+        
+        # Set the cookie on the response
+        response.set_cookie(
+            key="access_token",
+            value=token,
+            httponly=False,  # Set to False to debug - normally should be True
+            secure=False,    # Set to False for local development - should be True in production
+            samesite="lax",
+            max_age=self.token_expiration_minutes * 60
+        )
+        
+        # Also set the token in the request cookies for immediate effect
+        if isinstance(request.cookies, dict):
+            request.cookies["access_token"] = token
+            print(f"Added token to request.cookies: {token[:20]}...")
+        else:
+            print(f"WARNING: request.cookies is not a dict, type: {type(request.cookies)}")
+        
+        print(f"Login response cookies: {response.cookies}")
         return response
     
-    def _get_session_id_from_cookies(self, request: Request) -> Optional[str]:
-        """Estrae session ID dai cookie"""
-        # Implementazione semplice - in un'app reale useresti il parsing dei cookie
-        # Per ora simuliamo con gli headers
-        cookie_header = getattr(request, 'cookies', {})
-        return cookie_header.get(self.cookie_name)
-    
-    def _set_session_cookie(self, response: Response, session_id: str):
-        """Imposta il cookie di sessione"""
-        # Aggiunge header Set-Cookie alla risposta
-        if not hasattr(response, 'headers'):
-            response.headers = {}
-        response.headers['Set-Cookie'] = f"{self.cookie_name}={session_id}; Path=/; HttpOnly"
-    
-    def login_user(self, request: Request, user: User):
-        """Effettua login dell'utente"""
-        request.session.set('user_id', user.user_id)
-        request.session.set('username', user.username)
-        request.user = user
-    
-    def logout_user(self, request: Request):
-        """Effettua logout dell'utente"""
-        request.session.delete('user_id')
-        request.session.delete('username')
-        request.user = None
-
-
-# Decoratori per l'autenticazione
-def login_required(redirect_url: str = '/login'):
-    """Decorator che richiede login"""
-    def decorator(func: Callable):
-        @wraps(func)
-        def wrapper(request: Request, *args, **kwargs):
-            if not hasattr(request, 'user') or not request.user:
-                # Redirect a login (in un'app reale)
-                return Response(
-                    content=f'<script>window.location.href="{redirect_url}";</script>',
-                    status_code=401
-                )
-            return func(request, *args, **kwargs)
-        return wrapper
-    return decorator
-
-
-def permission_required(permission: str):
-    """Decorator che richiede un permesso specifico"""
-    def decorator(func: Callable):
-        @wraps(func)
-        def wrapper(request: Request, *args, **kwargs):
-            if not hasattr(request, 'user') or not request.user:
-                return Response(content="Unauthorized", status_code=401)
-            
-            # Controlla permesso (implementazione base)
-            user_permissions = request.user.get('permissions', [])
-            if permission not in user_permissions:
-                return Response(content="Forbidden", status_code=403)
-            
-            return func(request, *args, **kwargs)
-        return wrapper
-    return decorator
-
-
-def admin_required(func: Callable):
-    """Decorator che richiede privilegi admin"""
-    @wraps(func)
-    def wrapper(request: Request, *args, **kwargs):
-        if not hasattr(request, 'user') or not request.user:
-            return Response(content="Unauthorized", status_code=401)
+    def logout(self, request) -> None:
+        """
+        Log a user out by clearing the auth cookie.
         
-        is_admin = request.user.get('is_admin', False)
-        if not is_admin:
-            return Response(content="Admin access required", status_code=403)
+        Args:
+            request: The request object.
+        """
+        from .routing import Response
+        response = Response("", status_code=200)
+        self.clear_auth_cookie(response)
         
-        return func(request, *args, **kwargs)
-    return wrapper
-
-
-# Utilità per form di login
-def create_login_form():
-    """Crea un form di login base"""
-    from .forms import FormValidator, StringField, EmailField
-    
-    class LoginForm(FormValidator):
-        username = StringField(required=True, placeholder="Username")
-        password = StringField(required=True, placeholder="Password")
+        # Remove the cookie from the request safely
+        if isinstance(request.cookies, dict) and "access_token" in request.cookies:
+            del request.cookies["access_token"]
         
-        def render_login_form(self, action="/login", method="POST"):
-            """Renderizza form di login personalizzato"""
-            from .html import Form, Div, Button, H2
-            from .config import CSSClasses
-            
-            content = [
-                H2("Login", classes=[CSSClasses.TEXT_CENTER, CSSClasses.MB_4]),
-                self.render_field('username', 'Username'),
-                self.render_field('password', 'Password'),
-                Button("Login", 
-                      button_type="submit",
-                      classes=[CSSClasses.BTN, CSSClasses.BTN_PRIMARY, CSSClasses.W_100])
-            ]
-            
-            return Form(content, action=action, method=method, 
-                       classes=[CSSClasses.CONTAINER, "mt-5"])
-    
-    return LoginForm()
+        return response
 
-
-def create_register_form():
-    """Crea un form di registrazione base"""
-    from .forms import FormValidator, StringField, EmailField, ValidationError
-    
-    class RegisterForm(FormValidator):
-        username = StringField(required=True, min_length=3, placeholder="Username")
-        email = EmailField(required=True, placeholder="Email")
-        password = StringField(required=True, min_length=6, placeholder="Password")
-        confirm_password = StringField(required=True, placeholder="Confirm Password")
+    def get_current_user(self, request: Request) -> Optional[Any]:
+        """
+        Get the current user from the request's authentication cookie.
         
-        def clean(self):
-            """Validazione personalizzata"""
-            password = self.data.get('password')
-            confirm_password = self.data.get('confirm_password')
+        Args:
+            request: The incoming request.
             
-            if password != confirm_password:
-                raise ValidationError("Passwords do not match")
+        Returns:
+            The user object if authentication is successful, None otherwise.
+        """
+        # Check for token in cookies
+        token = request.cookies.get("access_token")
+        if not token:
+            print("No access_token found in cookies")
+            return None
+        
+        try:
+            # Decode the token
+            payload = self.decode_access_token(token)
+            user_id = payload.get("sub")
+            if not user_id:
+                print("No user_id (sub) found in token payload")
+                return None
+                
+            print(f"Found user_id in token: {user_id}")
+                
+            if not self.user_model:
+                print("User model not set. Use auth_manager.set_user_model(YourUserModel) first.")
+                raise ValueError("User model not set. Use auth_manager.set_user_model(YourUserModel) first.")
+            
+            # Get the database from request state
+            db = getattr(request.state, "db", None)
+            if not db:
+                print("Database not found on request.state.db. Make sure to configure the DatabaseMiddleware.")
+                raise ValueError("Database not found on request.state.db. Make sure to configure the DatabaseMiddleware.")
+            
+            # Fetch the user - use filter().first() instead of get() for more robustness
+            try:
+                # Try both filter and get approaches
+                print(f"Looking for user with id={user_id}")
+                
+                # First try with filter
+                user = self.user_model.objects(db).filter(id=user_id).first()
+                
+                if not user:
+                    # Then try with get
+                    print(f"filter() failed, trying get(id={user_id})")
+                    user = self.user_model.objects(db).get(id=user_id)
+                
+                if not user:
+                    print(f"User with id {user_id} not found in database")
+                    return None
+                    
+                print(f"Found user: {user.username} (ID: {user.id})")
+                return user
+            except Exception as e:
+                print(f"Error fetching user from database: {str(e)}")
+                return None
+        
+        except JWTError as je:
+            print(f"JWT Error: {str(je)}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error in get_current_user: {str(e)}")
+            return None
+            
+    def require_auth(self, f: Callable) -> Callable:
+        """
+        Decorator to require authentication for a route handler.
+        
+        Args:
+            f: The route handler function.
+            
+        Returns:
+            The wrapped function that checks authentication.
+        """
+        @functools.wraps(f)
+        def wrapped(request: Request, *args, **kwargs):
+            print(f"Checking authentication for: {request.path}")
+            print(f"Request cookies: {request.cookies}")
+            
+            token = request.cookies.get("access_token")
+            print(f"Access token: {token[:20] if token else 'None'}")
+            
+            user = self.get_current_user(request)
+            if not user:
+                from .routing import Response
+                print(f"Unauthorized access attempt to {request.path}")
+                # Return a more user-friendly unauthorized page
+                html_content = f"""
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Login Required</title>
+                    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+                </head>
+                <body>
+                    <div class="container mt-5">
+                        <div class="row justify-content-center">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header bg-danger text-white">
+                                        <h3>Login Required</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <p>You need to be logged in to access this page.</p>
+                                        <p>Please log in to continue.</p>
+                                        <a href="/" class="btn btn-primary">Go to Login Page</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+                return Response(html_content, status_code=401)
+            
+            # Attach the user to the request
+            request.state.user = user
+            print(f"User {user.username} (ID: {user.id}) authenticated for {request.path}")
+            return f(request, *args, **kwargs)
+        
+        return wrapped
+
+# Create a global auth manager instance
+auth_manager = AuthManager()
+
+# --- Convenience Functions ---
+
+def get_password_hash(password: str) -> str:
+    """Generate a secure hash of the password."""
+    return auth_manager.get_password_hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify that a plain password matches the hashed version."""
+    return auth_manager.verify_password(plain_password, hashed_password)
+
+def get_current_user(request: Request) -> Optional[Any]:
+    """Get the authenticated user from the request."""
+    return auth_manager.get_current_user(request)
+
+def require_auth(f: Callable) -> Callable:
+    """Decorator to require authentication for a route handler."""
+    return auth_manager.require_auth(f)
+
+# --- Base User Model ---
+
+class User(BaseModel):
+    """
+    Base user model for authentication.
+    Applications should subclass this to add additional fields.
+    """
+    __tablename__ = "users"
     
-    return RegisterForm()
+    id = Column(Integer, primary_key=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    @classmethod
+    def authenticate(cls, db, email: str, password: str) -> Optional["User"]:
+        """
+        Authenticate a user with email and password.
+        
+        Args:
+            db: The database instance.
+            email: The user's email.
+            password: The user's password.
+            
+        Returns:
+            The user if authentication succeeds, None otherwise.
+        """
+        user = cls.objects(db).get(email=email)
+        if not user or not verify_password(password, user.hashed_password):
+            return None
+        if not user.is_active:
+            return None
+        return user
+    
+    @classmethod
+    def create_user(cls, db, email: str, password: str, **kwargs) -> "User":
+        """
+        Create a new user with a hashed password.
+        
+        Args:
+            db: The database instance.
+            email: The user's email.
+            password: The user's plain text password (will be hashed).
+            **kwargs: Additional fields for the user.
+            
+        Returns:
+            The created user.
+        """
+        hashed_password = get_password_hash(password)
+        with db.session_scope() as session:
+            user = cls(
+                email=email,
+                hashed_password=hashed_password,
+                **kwargs
+            )
+            session.add(user)
+            session.commit()
+            return user
+
+# --- Example Usage ---
+
+if __name__ == "__main__":
+    from .orm import Database
+    
+    # 1. Setup the database
+    db = Database('sqlite:///./auth_test.db')
+    
+    # 2. Create the tables
+    db.create_all()
+    
+    # 3. Create a user
+    user = User.create_user(db, "test@example.com", "password123")
+    print(f"User created: {user.email}")
+    
+    # 4. Authenticate the user
+    authenticated_user = User.authenticate(db, "test@example.com", "password123")
+    if authenticated_user:
+        print("Authentication successful!")
+    else:
+        print("Authentication failed!")
+        
+    # 5. Create a JWT token for the user
+    auth_manager.set_user_model(User)
+    token = auth_manager.create_access_token({"sub": str(user.id)})
+    print(f"JWT token: {token}")
+    
+    # Clean up test database
+    import os
+    os.remove("auth_test.db")

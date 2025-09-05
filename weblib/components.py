@@ -2,11 +2,11 @@
 Sistema di Componenti per WebLib
 Permette di creare componenti HTML riutilizzabili
 """
-
+import uuid
 from typing import Dict, Any, List, Optional, Callable
 from .html import *
-from typing import List, Union, Optional, Dict, Any
 from .config import CSSClasses
+from .utils import safe_int, safe_sub, safe_add
 
 # Elementi HTML di base
 def Strong(content, classes=None):
@@ -43,14 +43,24 @@ def Hr(classes=None):
 
 
 class Component:
-    """Classe base per componenti riutilizzabili"""
+    """Base class for reusable components with state management."""
     
     def __init__(self, **props):
         self.props = props
         self._children = []
-    
+        self.state = {}
+        self.id = str(uuid.uuid4()) # Unique ID for each component instance
+
+    def set_state(self, new_state: Dict[str, Any]):
+        """
+        Updates the component's state. In a live context, this would
+        trigger a re-render and patch.
+        """
+        self.state.update(new_state)
+        print(f"Component {self.id} state updated: {self.state}")
+
     def render(self) -> HtmlElement:
-        """Deve essere implementato dalle sottoclassi"""
+        """Must be implemented by subclasses."""
         raise NotImplementedError("Component must implement render() method")
     
     def add_child(self, child):
@@ -62,6 +72,98 @@ class Component:
         """Ottiene una proprietà del componente"""
         return self.props.get(key, default)
 
+class LiveComponent(Component):
+    """
+    A component that maintains a live connection with the browser
+    for real-time updates.
+    """
+    def __init__(self, **props):
+        super().__init__(**props)
+        self.websocket = None
+
+    async def mount(self, websocket):
+        """Called when the component is first connected."""
+        self.websocket = websocket
+        await self.send_update()
+
+    async def handle_event(self, event: Dict[str, Any]):
+        """Handles incoming events from the browser."""
+        event_type = event.get("type")
+        handler_name = f"handle_{event_type}"
+        if hasattr(self, handler_name):
+            handler = getattr(self, handler_name)
+            await handler(event.get("payload"))
+            await self.send_update()
+
+    async def send_update(self):
+        """Renders the component and sends the HTML to the browser."""
+        if self.websocket:
+            html_content = self.render().render()
+            await self.websocket.send_text(html_content)
+
+    def render(self) -> HtmlElement:
+        """
+        Wraps the component's content with the necessary JavaScript bridge
+        to establish the WebSocket connection.
+        """
+        component_content = self.render_content()
+        
+        # The client-side script to manage the WebSocket connection
+        js_bridge = Script(f"""
+            (() => {{
+                const componentId = "{self.id}";
+                const componentRoot = document.getElementById(componentId);
+                if (componentRoot.dataset.weblibConnected) return; // Already connected
+                componentRoot.dataset.weblibConnected = "true";
+
+                const ws = new WebSocket("ws://" + window.location.host + "/ws");
+
+                ws.onopen = () => {{
+                    console.log(`WebSocket connected for component ${{componentId}}`);
+                    ws.send(JSON.stringify({{ type: "mount", component_id: componentId }}));
+                }};
+
+                ws.onmessage = (event) => {{
+                    const newHtml = event.data;
+                    const currentElement = document.getElementById(componentId);
+                    if (currentElement) {{
+                        // Use morphdom to efficiently update the DOM
+                        // For simplicity, we'll just replace the outerHTML for now
+                        const newElement = new DOMParser().parseFromString(newHtml, "text/html").body.firstChild;
+                        currentElement.parentNode.replaceChild(newElement, currentElement);
+                    }}
+                }};
+
+                ws.onclose = () => {{
+                    console.log("WebSocket disconnected.");
+                }};
+
+                componentRoot.addEventListener('click', e => {{
+                    let target = e.target;
+                    while (target && target !== componentRoot && !target.dataset.weblibEvent) {{
+                        target = target.parentElement;
+                    }}
+                    if (target && target.dataset.weblibEvent) {{
+                        e.preventDefault();
+                        ws.send(JSON.stringify({{
+                            type: "event",
+                            component_id: componentId,
+                            event: {{
+                                type: target.dataset.weblibEvent,
+                                payload: target.dataset.payload || {{}}
+                            }}
+                        }}));
+                    }}
+                }});
+            }})();
+        """)
+        
+        # Wrap the content in a div with the unique ID
+        return Div([component_content, js_bridge], id=self.id)
+        
+    def render_content(self) -> HtmlElement:
+        """Subclasses must implement this to define their actual content."""
+        raise NotImplementedError("LiveComponent subclasses must implement render_content()")
 
 class Card(Component):
     """Componente Card Bootstrap"""
@@ -260,58 +362,52 @@ class Breadcrumb(Component):
 
 
 class Pagination(Component):
-    """Componente Paginazione Bootstrap"""
+    """Componente Paginazione Bootstrap (safe)"""
     
     def render(self) -> HtmlElement:
-        current_page = self.get_prop('current_page', 1)
-        total_pages = self.get_prop('total_pages', 1)
-        base_url = self.get_prop('base_url', '?page=')
+        from .utils import safe_int  # assicurati che esista e gestisca spazi/segni
         
+        # 1) Coercizione robusta a int
+        current_page = safe_int(self.get_prop('current_page', 1), default=1)
+        total_pages = safe_int(self.get_prop('total_pages', 1), default=1)
+        
+        # 2) Guard-rails
+        if current_page < 1:
+            current_page = 1
+        if total_pages < 1:
+            total_pages = 1
+        if current_page > total_pages:
+            current_page = total_pages
+        
+        base_url = self.get_prop('base_url', '?page=')
         pages = []
         
-        # Previous
+        # Prev
         if current_page > 1:
-            pages.append(Li(
-                A("Previous", href=f"{base_url}{current_page-1}"),
-                classes=["page-item"]
-            ))
+            prev_page = current_page - 1
+            pages.append(Li(A("Previous", href=f"{base_url}{prev_page}"), classes=["page-item"]))
         else:
-            pages.append(Li(
-                Span("Previous"),
-                classes=["page-item", "disabled"]
-            ))
+            pages.append(Li(Span("Previous"), classes=["page-item", "disabled"]))
         
-        # Pagine numeriche
+        # Finestre di pagine (start/end) in modo sicuro
         start = max(1, current_page - 2)
-        end = min(total_pages + 1, current_page + 3)
+        end = min(total_pages, current_page + 2)
         
-        for page in range(start, end):
+        # Normalizza perché range è esclusivo sul limite superiore
+        for page in range(start, end + 1):
             if page == current_page:
-                pages.append(Li(
-                    Span(str(page)),
-                    classes=["page-item", "active"]
-                ))
+                pages.append(Li(Span(str(page)), classes=["page-item", "active"]))
             else:
-                pages.append(Li(
-                    A(str(page), href=f"{base_url}{page}"),
-                    classes=["page-item"]
-                ))
+                pages.append(Li(A(str(page), href=f"{base_url}{page}"), classes=["page-item"]))
         
         # Next
         if current_page < total_pages:
-            pages.append(Li(
-                A("Next", href=f"{base_url}{current_page+1}"),
-                classes=["page-item"]
-            ))
+            next_page = current_page + 1
+            pages.append(Li(A("Next", href=f"{base_url}{next_page}"), classes=["page-item"]))
         else:
-            pages.append(Li(
-                Span("Next"),
-                classes=["page-item", "disabled"]
-            ))
+            pages.append(Li(Span("Next"), classes=["page-item", "disabled"]))
         
-        return Nav([
-            Ul(pages, classes=["pagination"])
-        ])
+        return Nav([Ul(pages, classes=["pagination"])])
 
 
 class Badge(Component):
@@ -622,8 +718,8 @@ class ListGroup(Component):
                     Li(item, classes=["list-group-item"])
                 )
         
-        tag = "ol" if numbered else "ul"
-        return Div(list_items, tag=tag, classes=list_classes)
+        return (Ol if numbered else Ul)(list_items, classes=list_classes)
+
 
 
 class ButtonGroup(Component):
@@ -648,7 +744,7 @@ class ButtonGroup(Component):
 
 
 class Dropdown(Component):
-    """Componente Dropdown Bootstrap"""
+    """Componente Dropdown Bootstrap (token CSS corretti)"""
     
     def render(self) -> HtmlElement:
         items = self.get_prop('items', [])
@@ -660,7 +756,8 @@ class Dropdown(Component):
         size = self.get_prop('size', '')
         classes = self.get_prop('classes', [])
         
-        btn_classes = [f"btn btn-{variant}"]
+        # Correzione: token separati, non una singola stringa con spazio
+        btn_classes = ["btn", f"btn-{variant}"]
         if size:
             btn_classes.append(f"btn-{size}")
         
@@ -673,36 +770,29 @@ class Dropdown(Component):
         if dark:
             menu_classes.append("dropdown-menu-dark")
         
-        # Crea il menu
         menu_items = []
         for item in items:
             if item == "divider":
                 menu_items.append(Hr(classes=["dropdown-divider"]))
             elif isinstance(item, dict):
                 if item.get('header'):
-                    menu_items.append(
-                        H6(item['header'], classes=["dropdown-header"])
-                    )
+                    menu_items.append(H6(item['header'], classes=["dropdown-header"]))
                 else:
                     menu_items.append(
-                        A(item['text'], 
-                          href=item.get('href', '#'),
-                          classes=["dropdown-item"] + 
-                                 (["active"] if item.get('active') else []) +
-                                 (["disabled"] if item.get('disabled') else []))
+                        A(
+                            item['text'],
+                            href=item.get('href', '#'),
+                            classes=["dropdown-item"] + (['active'] if item.get('active') else []) + (['disabled'] if item.get('disabled') else [])
+                        )
                     )
         
-        # Crea il bottone
         if split:
             button_content = [
                 Button(label, classes=btn_classes),
                 Button(
                     Span("Toggle Dropdown", classes=["visually-hidden"]),
                     classes=btn_classes + ["dropdown-toggle", "dropdown-toggle-split"],
-                    attrs={
-                        "data-bs-toggle": "dropdown",
-                        "aria-expanded": "false"
-                    }
+                    attrs={"data-bs-toggle": "dropdown", "aria-expanded": "false"}
                 )
             ]
         else:
@@ -710,17 +800,11 @@ class Dropdown(Component):
                 Button(
                     [label, Span("", classes=["ms-1"]), ""],
                     classes=btn_classes + ["dropdown-toggle"],
-                    attrs={
-                        "data-bs-toggle": "dropdown",
-                        "aria-expanded": "false"
-                    }
+                    attrs={"data-bs-toggle": "dropdown", "aria-expanded": "false"}
                 )
             ]
         
-        button_content.append(
-            Ul(menu_items, classes=menu_classes)
-        )
-        
+        button_content.append(Ul(menu_items, classes=menu_classes))
         return Div(button_content, classes=dropdown_classes)
 
 
