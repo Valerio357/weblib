@@ -1,438 +1,215 @@
-# 🚀 WebLib v2.0
+# 🚀 WebLib: The Pythonic Web Framework
 
-**The Python library that revolutionizes web development**
+**Build modern, data-driven web applications with 100% Python. No HTML, no JavaScript, just pure productivity.**
 
-> 100% Python • Zero JavaScript • Batteries Included
+**[➡️ View the Live Demo](https://weblib-landing-page.onrender.com/)**
 
-WebLib is a powerful Python library for building modern web applications with a programmatic approach to HTML elements. Create complete web apps in just a few lines of code, with built-in support for multiple CSS frameworks, databases, and UI components.
+WebLib is a powerful Python library for building web applications with a programmatic approach. Create complete, interactive web apps with built-in support for CSS frameworks, databases, authentication, and UI components.
 
 ## ✨ Key Features
 
-- **🏃 Extreme Productivity**: Complete pages in 10 lines of code. 70% less code than Flask + Bootstrap
-- **🧩 Batteries Included**: Multi-framework CSS, Multi-database support, Authentication, Charts, 30+ UI components
-- **🐍 100% Python**: Zero JavaScript, HTML templates, or separate CSS files. Type-safe Python with full IDE support
-- **🔄 Framework Agnostic**: Switch CSS frameworks without changing code. Same Python, completely different styles
-- **💾 Database Flexibility**: Develop with SQLite, deploy with PostgreSQL. ZERO code changes
-- **📊 Built-in Data Visualization**: Charts with one line - no external libraries needed
-- **🔄 Real-Time Interactivity**: Built-in WebSocket support with server-side component model
-- **⚡ ASGI-powered**: High-performance async core for modern web requirements
-- **🔐 Enterprise-grade Security**: JWT authentication with secure cookies (HttpOnly, SameSite, Secure)
-
-## 🚀 Quick Start
-
-```bash
-# Install WebLib
-pip install weblib
-
-# Create your first app
-from weblib import *
-
-app = WebApp(__name__)
-set_css_framework('bootstrap')  # or 'tailwind', 'bulma'
-
-@app.get('/')
-def home(request):
-    return Div([
-        NavBar(brand="MyApp", links=[{"text": "Home", "url": "/"}]),
-        Card(title="Welcome", text="Your app is ready!"),
-        quick_line_chart("Sales", ["Jan", "Feb", "Mar"], [100, 150, 200])
-    ]).render()
-
-# Run ASGI server
-if __name__ == "__main__":
-    app.run()
-```
-
-## 💻 Live Demo
-
-Check out our examples:
-- **🌐 Landing Page**: Professional marketing page showcasing WebLib features
-- **🛍️ E-commerce Demo**: Full shopping cart with products, categories, and admin panel
-- **📊 Dashboard**: Analytics dashboard with charts and metrics
-- **🌟 Social Network**: Complete social media platform with authentication, posts, and real-time updates
-
-## 🎨 Multi-Framework CSS Support
-
-Switch between CSS frameworks instantly without changing your Python code:
-
-```python
-# Corporate Bootstrap look
-set_css_framework('bootstrap')
-
-# Modern Tailwind design  
-set_css_framework('tailwind')
-
-# Clean Bulma styling
-set_css_framework('bulma')
-Your app adapts automatically - same Python code, different visual results!
-
-## 💾 Multi-Database Support
-
-Seamlessly switch between databases without code changes:
-
-# Development
-db = get_db('sqlite:///dev.db')
-
-# Production
-db = get_db('postgresql://user:pass@prod:5432/db')
-
-# Same ORM, same queries!
-users = User.objects(db).filter(active=True).all()
-```
-
-Supported databases: SQLite, PostgreSQL, MySQL, MongoDB
-
-## 📊 Built-in Charts & Visualization
-
-Create stunning visualizations with one line:
-
-```python
-# Line chart
-chart = quick_line_chart("Revenue", months, revenue_data)
-
-# Pie chart  
-pie = quick_pie_chart("Categories", labels, values)
-
-# Bar chart
-bar = quick_bar_chart("Performance", quarters, performance_data)
-
-# Embed in your page
-dashboard = Div([
-    H1("Analytics Dashboard"),
-    chart,
-    Row([Col(pie), Col(bar)])
-]).render()
-```
-
-## 🧩 Rich UI Components
-
-30+ ready-to-use components:
-
-```python
-# Navigation
-NavBar(brand="MyApp", links=[...], theme="dark")
-
-# Layout
-Container([
-    Row([
-        Col(Card(title="Feature 1", text="Description"), width=4),
-        Col(Card(title="Feature 2", text="Description"), width=4),
-        Col(Card(title="Feature 3", text="Description"), width=4)
-    ])
-])
-
-# Forms
-Form([
-    Input("email", type="email", placeholder="Your email"),
-    Input("password", type="password", placeholder="Password"),
-    Button("Login", type="submit", classes=["btn-primary"])
-])
-
-# Data display
-Table(data=users, headers=["Name", "Email", "Status"])
-```
-
-## 🔐 Built-in Authentication
-
-Complete authentication system included:
-
-```python
-@app.get('/dashboard')
-@require_auth  # Built-in decorator
-def dashboard(request):
-    user = get_current_user()
-    return Div([
-        H1(f"Welcome, {user.name}!"),
-        # ... dashboard content
-    ])
-
-# Login/logout routes auto-generated
-# User management built-in
-# Session handling included
-```
-
-## 🏗️ Project Structure
-
-```
-your-project/
-├── main.py              # Your main application
-├── models/              # Database models (optional)
-├── static/              # Static assets (auto-generated)
-├── templates/           # Not needed! Pure Python
-└── requirements.txt     # Just: weblib
-```
-
-## 📖 Complete Examples
-
-### E-commerce Shop
-```python
-from weblib import *
-
-app = WebApp(__name__)
-set_css_framework('bootstrap')
-
-# Sample products data
-products = [
-    {"id": 1, "name": "Python Book", "price": 29.99, "image": "/static/book.jpg"},
-    {"id": 2, "name": "WebLib Guide", "price": 19.99, "image": "/static/guide.jpg"}
-]
-
-@app.get('/')
-def shop(request):
-    return Div([
-        ShoppingNavbar(),
-        ProductGrid(products),
-        ShoppingCart()
-    ]).render()
-
-if __name__ == "__main__":
-    app.run()
-```
-
-### Analytics Dashboard
-```python
-@app.get('/dashboard')
-def analytics(request):
-    sales_data = get_sales_data()
-    user_metrics = get_user_metrics()
-    
-    return Div([
-        H1("Analytics Dashboard"),
-        Row([
-            Col([
-                Card([
-                    H3("Total Sales"),
-                    H2(f"${sales_data['total']:,.2f}", classes=["text-success"])
-                ])
-            ], width=3),
-            Col([
-                quick_line_chart("Sales Trend", sales_data['months'], sales_data['values'])
-            ], width=9)
-        ]),
-        quick_pie_chart("User Types", user_metrics['labels'], user_metrics['data'])
-    ]).render()
-```
-
-## 🆚 Comparison with Other Frameworks
-
-| Framework | Setup Time | Code Lines | Full Stack | Learning Curve | Maintenance | Async Support |
-|-----------|------------|------------|------------|----------------|-------------|--------------|
-| **WebLib** | 30 seconds | **-70%** | ✅ Built-in | 1 week | 🟢 Low | ✅ ASGI |
-| Flask + Bootstrap | 15 minutes | Baseline | ❌ Manual | 1 month | 🟡 Medium | ❌ WSGI only |
-| Django | 45 minutes | +150% | ✅ Monolithic | 3 months | 🔴 High | ❌ WSGI only |
-| FastAPI + React | 2+ hours | +200% | ❌ Split stack | 6+ months | 🔴 Very High | ✅ ASGI |
-
-## 🎯 Perfect Use Cases
-
-- **🏢 Internal Tools**: Admin panels, dashboards, CRUD applications
-- **🚀 Startup MVPs**: Rapid prototyping and MVP development  
-- **📊 Data Applications**: Analytics, reporting, data visualization
-- **🎓 Education**: Teaching web development concepts
-- **🔧 Automation**: Web UIs for Python scripts
-- **👥 Small Teams**: 1-5 Python developers
-- **⚡ Real-time Apps**: Interactive dashboards, live updates, and collaborative tools
-
-## 📈 Measurable ROI
-
-- **Time to Market**: -80% reduction
-- **Team Size**: -50% smaller teams needed
-- **Bug Rate**: -60% fewer bugs
-- **Learning Curve**: -90% faster onboarding
-- **Hosting Costs**: -40% reduced infrastructure needs
-
-## 🛠️ Installation & Setup
-
-```bash
-# Install WebLib
-pip install weblib-py
-
-# Create new project
-mkdir my-web-app
-cd my-web-app
-
-# Create main.py
-cat > main.py << 'EOF'
-from weblib import *
-
-app = WebApp(__name__)
-set_css_framework('bootstrap')
-
-@app.get('/')
-def home(request):
-    return Div([
-        H1("Hello WebLib!", classes=["text-center", "mt-5"]),
-        P("Your app is ready to go!", classes=["text-center", "lead"])
-    ]).render()
-
-if __name__ == "__main__":
-    app.run(debug=True)
-EOF
-
-# Run your app
-python main.py
-```
-
-Visit http://localhost:5000 - your app is live! 🎉
-
-## 🌟 Advanced Features
-
-### Custom Components
-```python
-def UserCard(user):
-    return Card([
-        Img(src=user.avatar, classes=["card-img-top"]),
-        H5(user.name, classes=["card-title"]),
-        P(user.bio, classes=["card-text"]),
-        Button(f"Follow {user.name}", classes=["btn-primary"])
-    ], classes=["user-card"])
-
-# Use anywhere
-user_grid = Row([
-    Col(UserCard(user), width=4) for user in users
-])
-```
-
-### ORM Integration
-```python
-# Define your models
-class User(Model):
-    name = Field(str)
-    email = Field(str, unique=True)
-    is_active = Field(bool, default=True)
-    
-    def __str__(self):
-        return f"{self.name} <{self.email}>"
-
-# Use the unified ORM
-db = Database("sqlite:///app.db")
-db.create_tables([User])
-
-# Create, query, and manipulate data
-user = User.objects.create(name="John Doe", email="john@example.com")
-active_users = User.objects.filter(is_active=True).all()
-inactive_count = User.objects.filter(is_active=False).count()
-
-# Works with any supported database engine with no code changes
-```
-
-### Authentication System
-```python
-# Initialize authentication
-auth = AuthManager(app, db, user_model=User)
-
-# Create login routes
-auth.setup_routes()
-
-# Protect your routes
-@app.get('/dashboard')
-@auth.require_auth
-def dashboard(request):
-    user = auth.get_current_user(request)
-    return Div([
-        H1(f"Welcome {user.name}!"),
-        # Dashboard content
-    ]).render()
-
-# OAuth2 integration
-auth.add_oauth_provider('google', client_id, client_secret)
-```
-
-### Real-time Components
-```python
-# Live counter component with automatic state management
-class CounterComponent(LiveComponent):
-    def __init__(self, initial_count=0):
-        super().__init__()
-        self.count = initial_count
-    
-    def increment(self):
-        self.count += 1
-        # Automatic HTML diffing and patching
-    
-    def render(self):
-        return Div([
-            H3(f"Count: {self.count}"),
-            Button("Increment", onclick=self.increment)
-        ])
-
-# Use in your routes
-@app.get('/counter')
-def counter_page(request):
-    return Div([
-        H1("Live Counter Example"),
-        CounterComponent(initial_count=0)
-    ]).render()
-```
-
-## 📚 Documentation
-
-- **📖 Full Documentation**: [docs.weblib.dev](https://docs.weblib.dev)
-- **🎯 API Reference**: [api.weblib.dev](https://api.weblib.dev)
-- **💡 Examples**: [examples.weblib.dev](https://examples.weblib.dev)
-- **🎥 Video Tutorials**: [learn.weblib.dev](https://learn.weblib.dev)
-- **🧑‍💻 Component Library**: See `/docs` folder for comprehensive documentation
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how:
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
-
-### Development Setup
-```bash
-# Clone repository
-git clone https://github.com/weblib/weblib.git
-cd weblib
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install development dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Run examples
-python examples/shop_demo.py
-python examples/landing_page.py
-python examples/social_network_demo.py  # Social media platform demo
-```
-
-## 🌟 Community & Support
-
-- **💌 Email**: valeriodomenici93@gmail.com
-
-## 📋 Roadmap
-
-- [x] Multi-framework CSS support
-- [x] Multi-database ORM
-- [x] Built-in authentication
-- [x] Chart generation
-- [x] WebSocket support
-- [x] ASGI implementation
-- [x] Server-side component model
-- [x] Secure cookie handling
-- [ ] Real-time collaboration features
-- [ ] AI-assisted component creation
-- [ ] Plugin system
-- [ ] Cloud deployment tools
-
-## ⚖️ License
-
-WebLib is released under the **Apache 2.0 License**. See [LICENSE](LICENSE) file for details.
+- **🐍 100% Python**: Build complex UIs without writing a single line of HTML or JavaScript.
+- **🧩 Rich Component Library**: Over 30 ready-to-use components, from navbars to data tables.
+- **📊 Built-in Data Visualization**: Create interactive charts with a single function call.
+- **� Integrated Authentication**: Secure user authentication and session management out of the box.
+- **� Flexible ORM**: Interact with your database using intuitive Python objects. Supports PostgreSQL, SQLite, and more.
+- **⚡ High Performance**: Built on Starlette and Uvicorn for asynchronous speed.
 
 ---
 
-## 🚀 Ready to revolutionize your web development?
+## 🚀 Quick Start: A Complete Starter App
+
+This example demonstrates a complete, runnable application with a navbar, a card, a chart, and a paginated list of items.
+
+**File: `app.py`**
+```python
+#!/usr/bin/env python3
+from weblib import WebApp, PageBuilder
+from weblib.components import *
+from weblib.charts import quick_line_chart
+from weblib.html import Div, H1, P
+from weblib.config import CSSClasses as CSS
+from weblib.utils import extract_query_param
+
+# 1. Initialize the App
+app = WebApp("WebLib Starter App")
+
+# 2. Sample Data
+sample_items = [f"Item {i}" for i in range(1, 101)]
+sales_data = {"labels": ["Jan", "Feb", "Mar"], "data": [100, 150, 120]}
+
+# 3. Create the Main Route
+@app.route("/")
+def index(request):
+    """Main page showcasing various components."""
+    page = PageBuilder(title="WebLib Starter Pack")
+    
+    # Add Bootstrap CSS and JS
+    page.add_css("https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css")
+    page.add_js("https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js")
+    page.add_js("https://cdn.jsdelivr.net/npm/chart.js")
+
+    # --- Page Content ---
+    
+    # Navbar
+    navbar = NavBar(brand="MyApp", links=[
+        {"text": "Home", "url": "/"},
+        {"text": "About", "url": "/about"}
+    ])
+    page.add_to_body(navbar)
+
+    # Main Container
+    container = Div(classes=[CSS.CONTAINER, CSS.MT_5])
+    
+    # Header
+    container.add_child(H1("Welcome to WebLib!", classes=[CSS.TEXT_CENTER, "mb-4"]))
+    container.add_child(P("A complete starter example.", classes=[CSS.LEAD, CSS.TEXT_CENTER, "mb-5"]))
+
+    # Grid for components
+    row = Div(classes=[CSS.ROW])
+    
+    # Card and Chart
+    chart = quick_line_chart("salesChart", sales_data["labels"], sales_data["data"])
+    row.add_child(Div(Card(title="Sales Chart", content=[chart]), classes=[CSS.COL_MD_6, CSS.MB_4]))
+    
+    # Paginated List
+    page_num = extract_query_param(request.query_string, "page", 1, as_int=True)
+    items_per_page = 10
+    total_pages = (len(sample_items) + items_per_page - 1) // items_per_page
+    
+    start_index = (page_num - 1) * items_per_page
+    end_index = start_index + items_per_page
+    paginated_items = sample_items[start_index:end_index]
+    
+    item_list = Ul([Li(item, classes=["list-group-item"]) for item in paginated_items], classes=["list-group"])
+    
+    pagination_component = Pagination(
+        current_page=page_num,
+        total_pages=total_pages,
+        base_url="/?page="
+    )
+    
+    list_card = Card(title="Paginated List", content=[item_list, pagination_component])
+    row.add_child(Div(list_card, classes=[CSS.COL_MD_6, CSS.MB_4]))
+
+    container.add_child(row)
+    page.add_to_body(container)
+    
+    return page.build()
+
+# 4. Run the App
+if __name__ == "__main__":
+    print("🚀 Starting WebLib Starter App on http://127.0.0.1:5000")
+    app.run(debug=True)
+```
+
+**To run this example:**
+1. Save the code as `app.py`.
+2. Install the necessary dependencies:
+   ```bash
+   pip install starlette uvicorn python-multipart
+   ```
+3. Run the script:
+   ```bash
+   python app.py
+   ```
+4. Open `http://127.0.0.1:5000` in your browser.
+
+---
+
+## 📖 Core Concepts
+
+### Components
+WebLib provides a rich set of pre-built components.
+
+```python
+# Simple Card
+Card(title="My Card", text="This is the content of the card.")
+
+# Alert Message
+Alert(message="Operation successful!", type="success")
+
+# Navigation Bar
+NavBar(brand="MyApp", links=[{"text": "Home", "url": "/"}])
+```
+
+### Layouts
+Structure your page with responsive grids.
+
+```python
+container = Div(classes=[CSS.CONTAINER])
+row = Div(classes=[CSS.ROW])
+
+col1 = Div(Card(title="First"), classes=[CSS.COL_MD_6])
+col2 = Div(Card(title="Second"), classes=[CSS.COL_MD_6])
+
+row.add_child(col1).add_child(col2)
+container.add_child(row)
+```
+
+### Charts
+Generate charts from your Python data.
+
+```python
+# Line Chart
+chart = quick_line_chart(
+    chart_id="myChart", 
+    labels=["Jan", "Feb", "Mar"], 
+    data=[10, 20, 15]
+)
+```
+
+### Forms & ORM
+Define forms and database models with Python classes.
+
+```python
+# forms.py
+class RegistrationForm(FormValidator):
+    username = StringField(required=True)
+    email = EmailField(required=True)
+
+# models.py
+class User(Model):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    username = Column(String(80), unique=True)
+    email = Column(String(120), unique=True)
+
+# app.py
+@app.route("/register", methods=["GET", "POST"])
+def register(request):
+    form = RegistrationForm()
+    if request.method == "POST" and form.validate(request.form_data):
+        User.create_user(db=db, **form.data)
+        return Response("User created!")
+    return form.render_form()
+```
+
+---
+
+## �️ Installation
+
+To use WebLib, you need Python 3.7+ and pip.
 
 ```bash
-pip install weblib-py
+# Install core library and dependencies
+pip install starlette uvicorn python-multipart sqlalchemy psycopg2-binary passlib python-jose bcrypt requests
 ```
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [contributing guide](CONTRIBUTING.md) for more details.
+
+1. **Fork** the repository.
+2. **Create** a feature branch (`git checkout -b feature/my-feature`).
+3. **Commit** your changes (`git commit -m 'Add my new feature'`).
+4. **Push** to the branch (`git push origin feature/my-feature`).
+5. **Open** a Pull Request.
+
+## ⚖️ License
+
+WebLib is released under the **Apache 2.0 License**. See the [LICENSE](LICENSE) file for details.
+
+---
 
 **Made with ❤️ and Python | © 2025 WebLib**
