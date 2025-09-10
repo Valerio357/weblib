@@ -142,11 +142,11 @@ class CSSFramework(ABC):
     # Spacing
     def margin(self, size: int, side: Optional[str] = None) -> str:
         """Genera classe margin"""
-        return f"m{''-'' + side if side else ''}-{size}"
-    
+        return f"m{side + '-' if side else '-'}{size}"
+
     def padding(self, size: int, side: Optional[str] = None) -> str:
         """Genera classe padding"""
-        return f"p{''-'' + side if side else ''}-{size}"
+        return f"p{side + '-' if side else '-'}{size}"
     
     # Colors
     @abstractmethod
