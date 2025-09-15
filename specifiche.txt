@@ -1,0 +1,521 @@
+# WebLib v2 — Specifiche tecniche complete
+
+> Obiettivo: progettare una libreria Python moderna per costruire siti e web app server‑side (ASGI) con component model, routing tipato, ORM pluggable, Page/Element immutabili, CSS scoping, static assets, plugin, DI leggera, eventi opzionali via WS/SSE, e DX curata.
+
+---
+
+## 0) Principi Architetturali
+
+* **App-first**: un contenitore `WebApp` orchestra routing, ORM, rendering, assets, plugin e lifecycle.
+* **Async-by-default**: compatibilità nativa ASGI (Uvicorn/Hypercorn); I/O e ORM async.
+* **Immutabilità leggera**: `Page`, `Element`, `CSS` preferibilmente immutabili con metodi a builder.
+* **Interfacce e Adapter**: protocolli (PEP 544) per ORM/Storage/Cache/Template con implementazioni swappabili.
+* **Sicurezza by default**: escaping HTML, sanitizzazione attributi, headers sicuri, CSRF dove serve, cookie HttpOnly/SameSite, CORS configurabile.
+* **DX curata**: API ergonomiche, errori chiari, tipizzazione, CLI, hot-reload.
+* **Estendibilità**: sistema di plugin, middleware, hooks di lifecycle, events.
+
+---
+
+## 1) Struttura del Pacchetto
+
+```
+weblib/
+  __init__.py                # re-export controllato
+  app.py                     # WebApp, WebAppConfig, lifecycle
+  config.py                  # tipi/config
+  runtime/
+    asgi.py                  # entrypoint ASGI, adapters Response/Request
+    ws.py                    # websocket/sse
+    middleware.py            # middleware core (cors, security, sessions)
+  routing/
+    __init__.py
+    core.py                  # Routes, route decorators, groups, params
+    params.py                # binding/path converters/validators
+    responses.py             # HTTP helpers (ok, created, redirect, stream, file)
+  orm/
+    __init__.py
+    protocol.py              # ORM Protocol (CRUD, migrations, sessions)
+    sqlalchemy_impl.py       # adapter default (async)
+    model.py                 # Base Model
+    fields.py                # DSL tipi campi
+    migrations.py            # interfaccia migrazioni
+  page/
+    __init__.py
+    page.py                  # Page, Layout, Meta, Slots
+    templates.py             # renderer opzionale Jinja2/Chameleon
+  elements/
+    __init__.py
+    core.py                  # Element, E factory, Component, Var
+    html_tags.py             # generato: E.div, E.a, E.img, ...
+    forms.py                 # helpers per form, validation client/server
+  css/
+    __init__.py
+    css.py                   # CSS, css(), scoping, merge, minify
+    tokens.py                # design tokens, theme
+  assets/
+    __init__.py
+    static.py                # static files, versioning, etags
+    upload.py                # uploads multipart, storage backends
+  security/
+    __init__.py
+    auth.py                  # sessions, OAuth2, password hashing
+    csrf.py                  # protezione CSRF
+    rate_limit.py            # rate limiting pluggable
+  utils/
+    types.py
+    validation.py
+    errors.py                # eccezioni di dominio
+    logging.py               # integrazione strutturata
+  cli/
+    __init__.py
+    main.py                  # `weblib` CLI: new/dev/migrate/inspect
+  plugins/
+    __init__.py
+    auth.py                  # esempio plugin
+    admin.py                 # admin UI
+  testing/
+    client.py                # TestClient, fixtures
+```
+
+---
+
+## 2) API Pubblica (import ergonomico)
+
+```python
+from weblib import WebApp
+from weblib.routing import Routes, route, HTTP
+from weblib.orm import ORM, Model, fields
+from weblib.page import Page
+from weblib.elements import E, Component, Var
+from weblib.css import CSS, css
+from weblib.assets import Static
+```
+
+### 2.1 WebApp
+
+```python
+class WebApp:
+    def __init__(self,
+                 routes: "Routes" | None = None,
+                 orm: "ORM" | None = None,
+                 static: "Static" | None = None,
+                 config: "WebAppConfig" | None = None): ...
+
+    # Lifecycle
+    async def on_startup(self): ...
+    async def on_shutdown(self): ...
+
+    # DI minimal
+    def provide(self, key: str, value: object): ...
+    def get(self, key: str) -> object: ...
+
+    # Extension points
+    def register_plugin(self, plugin: "Plugin"): ...
+
+    # ASGI
+    @property
+    def asgi(self): ...
+```
+
+`WebAppConfig`: debug, base\_url, secrets, cors, security headers, session config, gzip/brotli, etags, max body size, logging.
+
+### 2.2 Routing
+
+```python
+class Routes:
+    def __init__(self, prefix: str = "", middlewares: list[Callable] | None = None): ...
+    def include(self, other: "Routes"): ...
+    def use(self, middleware: Callable): ...
+
+class route:
+    @staticmethod
+    def get(path: str, *, name: str | None = None): ...
+    @staticmethod
+    def post(path: str, *, name: str | None = None): ...
+    @staticmethod
+    def put(path: str, *, name: str | None = None): ...
+    @staticmethod
+    def patch(path: str, *, name: str | None = None): ...
+    @staticmethod
+    def delete(path: str, *, name: str | None = None): ...
+    @staticmethod
+    def websocket(path: str, *, name: str | None = None): ...
+
+class HTTP:
+    @staticmethod
+    def ok(body: Any, *, headers: dict[str,str] | None = None): ...
+    @staticmethod
+    def created(body: Any, *, location: str | None = None): ...
+    @staticmethod
+    def redirect(location: str, status: int = 302): ...
+    @staticmethod
+    def html(markup: str, status: int = 200): ...
+    @staticmethod
+    def stream(iterator: AsyncIterable[bytes], *, content_type: str): ...
+    @staticmethod
+    def file(path: str, *, filename: str | None = None): ...
+```
+
+**Binding parametri**: converter `{id:int}`, `{slug:str}`, `{active:bool}`; query/body validation con `pydantic` opzionale.
+
+**Middlewares core**: `cors`, `security_headers`, `sessions`, `request_id`, `logging`, `rate_limit`.
+
+### 2.3 ORM (Protocol + Adapter)
+
+```python
+class ORM(Protocol):
+    async def create_database(self): ...
+    async def drop_database(self): ...
+    def session(self) -> AsyncContextManager["Session"]: ...
+    async def migrate(self): ...
+    def repo(self, model: type["Model"]) -> "Repository": ...
+
+class Model:
+    class Meta:
+        table_name: str | None = None
+    # CRUD helpers
+    @classmethod
+    async def create(cls, **fields): ...
+    @classmethod
+    async def get(cls, **filters): ...
+    @classmethod
+    def query(cls) -> "Query": ...
+    async def update(self, **fields): ...
+    async def delete(self): ...
+
+class fields:
+    @staticmethod
+    def Int(pk: bool = False, default: int | None = None): ...
+    def Str(max_length: int | None = None, unique: bool = False): ...
+    def Text(): ...
+    def Bool(default: bool = False): ...
+    def Datetime(auto_now: bool = False, auto_now_add: bool = False): ...
+    def ForeignKey(to: type[Model], on_delete: str = "cascade"): ...
+```
+
+**Adapter default**: `SQLAlchemyORM` (async) con Alembic-like migrations.
+
+### 2.4 Page & Layout
+
+```python
+class Page:
+    def __init__(self, title: str = "", layout: type["Layout"] | None = None, lang: str = "en"): ...
+    def meta(self, **tags) -> "Page": ...                 # es: description, og:*, twitter:*
+    def head(self, *nodes: "Element") -> "Page": ...
+    def body(self, *nodes: "Element") -> "Page": ...
+    def scripts(self, *nodes: "Element") -> "Page": ...
+    def use_css(self, *sheets: "CSS") -> "Page": ...
+    def render(self) -> str: ...
+
+class Layout(Protocol):
+    def __call__(self, page: Page) -> Page: ...
+```
+
+### 2.5 Elements (DSL HTML) & Component Model
+
+```python
+class Element:
+    tag: str
+    attrs: dict[str, Any]
+    children: tuple["Node", ...]
+    def attr(self, **attrs) -> "Element": ...   # immutabile
+    def cls(self, value: str) -> "Element": ...
+
+Node = str | Element | "Component"
+
+class E:
+    # factory dinamica: E.div(...), E.a("Click", href="/")
+    pass
+
+class Component:
+    def __init__(self, **props): ...
+    def render(self) -> Element | str: ...
+    # lifecycle opzionale
+    async def on_mount(self, req): ...
+
+class Var(Generic[T]):
+    # marker per props tipate nei Component
+    pass
+```
+
+**Sicurezza**: escaping e sanitizzazione attributi/event handlers; whitelist attributi per tag; policy CSP consigliata.
+
+**Eventi (opzionale)**: `on_click`, `on_submit` tramite idratazione minima, WS/SSE; fallback progressive enhancement.
+
+### 2.6 CSS (Scoping, Merge, Minify)
+
+```python
+class CSS:
+    @staticmethod
+    def scope(name: str) -> "CSS": ...
+    def add(self, *rules: "Rule") -> "CSS": ...
+    def merge(self, *others: "CSS") -> "CSS": ...
+    def minify(self) -> "CSS": ...
+    def render(self) -> str: ...
+
+class Rule:
+    selector: str
+    declarations: dict[str, str]
+
+def css(selector: str, decls: dict[str, str]) -> Rule: ...
+```
+
+**Tokens/Theme**: `CSS.theme({...})` per shared tokens (colori, spacing, font); dark mode: media queries.
+
+### 2.7 Assets Statici & Uploads
+
+```python
+class Static:
+    def __init__(self, directory: str, mount: str = "/static", versioned: bool = True): ...
+```
+
+**Uploads**: parser multipart, validazioni MIME, storage astratto (`LocalFS`, `S3`, `GCS`), antivirus hook opzionale.
+
+### 2.8 Security & Sessions
+
+* **Headers**: `Strict-Transport-Security`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Content-Security-Policy`.
+* **CORS** configurabile.
+* **Sessioni**: cookie firmati/criptati (HttpOnly, SameSite=Lax/Strict), store pluggable (memory/redis/db).
+* **Auth**: plugin con login/password (argon2), OAuth2 (authorization code + PKCE), JWKS per API.
+* **CSRF**: token su form POST; doppio submit cookie.
+* **Rate limiting**: per IP/user/route con backends (memory/redis).
+
+### 2.9 Templating (opzionale)
+
+* Renderer Jinja2/Chameleon come alternativa o integrazione ad `Element`/`Page`.
+* Layout, partials, cache template.
+
+---
+
+## 3) DX, CLI e Dev Server
+
+```bash
+# Creazione progetto
+weblib new mysite
+cd mysite
+weblib dev            # dev server con auto‑reload
+weblib migrate make   # genera migrazione
+weblib migrate apply  # applica migrazioni
+weblib routes         # stampa mappa rotte
+```
+
+**Dev server**: auto‑reload, error overlay con stacktrace e suggerimenti.
+
+**Config**: `.env` + `settings.py` tipato; `WEBlib_` env vars.
+
+**Logger**: JSON structured log, request\_id, tempi, status.
+
+---
+
+## 4) Middleware inclusi
+
+* `cors(origin=*, credentials=False)`
+* `security_headers(preset="strict")`
+* `sessions(store=Memory|Redis, cookie_name, secret, same_site)`
+* `request_id(header="X-Request-Id")`
+* `gzip()` / `brotli()`
+* `static()` mount
+* `csrf()`
+* `rate_limit(limit, window, key_fn)`
+
+---
+
+## 5) Pattern e Plugin
+
+* **Plugin API**
+
+```python
+class Plugin(Protocol):
+    def setup(self, app: WebApp): ...
+```
+
+* `AuthPlugin`, `AdminPlugin`, `SitemapPlugin`, `I18nPlugin`, `FeedsPlugin`, `EmailPlugin` (SMTP), `JobsPlugin` (APScheduler), `CachePlugin` (Redis), `SearchPlugin` (Whoosh/Meilisearch), `AnalyticsPlugin` (server‑side events), `PaymentsPlugin` (Stripe adapter), `OpenAPIPlugin` (schema/console), `GraphQLPlugin` (Ariadne/Strawberry).
+
+* **Groups/Versioning**: `Routes(prefix="/api", middlewares=[auth])`, version `v1`, `v2`.
+
+* **Error Boundaries**: handler globale `on_error(exc) -> Page | HTTP` + pagine 404/500 personalizzabili.
+
+---
+
+## 6) Esempio d’Uso End‑to‑End
+
+```python
+from weblib import WebApp
+from weblib.routing import Routes, route, HTTP
+from weblib.orm import ORM, Model, fields
+from weblib.page import Page
+from weblib.elements import E, Component, Var
+from weblib.css import CSS, css
+from weblib.assets import Static
+
+app = WebApp(
+    routes=Routes(),
+    orm=ORM.default("postgresql+asyncpg://user:pass@localhost/db"),
+    static=Static(directory="static"),
+)
+
+class Post(Model):
+    id = fields.Int(pk=True)
+    title = fields.Str(max_length=200)
+    body = fields.Text()
+    created_at = fields.Datetime(auto_now_add=True)
+
+class PostCard(Component):
+    post: Var[Post]
+    def render(self):
+        p = self.post
+        return E.article(
+            E.h2(p.title, cls="text-xl font-bold"),
+            E.p(p.body, cls="prose")
+        ).cls("rounded-xl shadow p-4 bg-white")
+
+base_css = CSS.scope("base").add(
+    css("body", {"font-family": "system-ui", "background": "#fafafa"}),
+    css(".container", {"max-width": "720px", "margin": "0 auto", "padding": "24px"}),
+)
+
+@route.get("/")
+async def home(req):
+    posts = await Post.query().order("-created_at").limit(10)
+    page = (Page(title="Home")
+            .use_css(base_css)
+            .body(E.div(
+                E.h1("Hello WebLib", cls="text-3xl mb-6"),
+                *[PostCard(post=p) for p in posts]
+            ).cls("container")))
+    return page
+
+@route.post("/posts")
+async def create_post(req):
+    data = await req.json()
+    p = await Post.create(title=data["title"], body=data["body"])
+    return HTTP.created({"id": p.id})
+
+app.routes.register(home, create_post)
+app_instance = app  # uvicorn weblib.runtime.asgi:app_instance
+```
+
+---
+
+## 7) Non‑Functional Requirements
+
+* **Performance**: rendering < 2ms per Page “pura”; caching componenti puri; gzip/brotli; HTTP/2 ready.
+* **Scalabilità**: stateless (session store esterno), workers ASGI, sticky opzionale per WS.
+* **Sicurezza**: CSP preset, cookie secure, escaping, rate limit, CSRF.
+* **I18n/L10n**: plugin per messaggi, formattazione date/numeri, routing locale (`/it`, `/en`).
+* **Accessibilità**: helpers ARIA, lint su `alt`, `label`, contrasto.
+* **Compatibilità**: Py3.11+, Pydantic v2 opzionale, SQLAlchemy 2.x async.
+
+---
+
+## 8) Testing & QA
+
+* `TestClient(app.asgi)` (httpx/anyio) per test end‑to‑end.
+* Fixture DB transazionale; factories per Model.
+* Snapshot testing per `Page.render()`.
+* Lint/format: ruff + black, typecheck: mypy/pyright.
+
+---
+
+## 9) CLI Dettagli
+
+* `weblib new <name> [--template=minimal|blog|admin]`
+* `weblib dev --reload`
+* `weblib routes --tree --json`
+* `weblib migrate make -m "msg"`
+* `weblib migrate apply [--database=...]`
+* `weblib inspect orm`
+
+---
+
+## 10) Roadmap
+
+1. **MVP**: WebApp, Routes (+decoratori), HTTP helpers, Page/E/CSS base, ORM SQLAlchemy, Static, middleware security/cors/sessions, CLI minimal, TestClient.
+2. **Components**: memoization, layout, forms helpers, uploads, sitemap plugin, OpenAPI plugin, i18n.
+3. **Realtime**: WS/SSE eventi server, hydration selettiva; Admin plugin.
+4. **Adapters**: ORM (Tortoise/Piccolo), storages (S3/GCS), cache (Redis), mail, payments.
+
+---
+
+## 11) Linee guida di stile API
+
+* Nomi corti e chiari (`E.div`, `Page.body`, `route.get`).
+* Metodi immutabili ritornano `self` copiato.
+* Pochi default “magici”; configurazione esplicita.
+* Errori parlanti con hint di fix.
+
+---
+
+## 12) Sicurezza (checklist)
+
+* [ ] Escape output HTML by default
+* [ ] Whitelist attributi/URL (`http`, `https`, `mailto`, `tel`, `ws[s]` condizionati)
+* [ ] CSP preset e nonce per inline script opzionali
+* [ ] Cookie: `Secure`, `HttpOnly`, `SameSite`
+* [ ] CSRF su POST/PUT/PATCH/DELETE form
+* [ ] Rate limit login/API
+* [ ] Protezione upload (MIME, size, scan hook)
+
+---
+
+## 13) Accessibilità (checklist)
+
+* [ ] Ruoli/ARIA helpers in `E`
+* [ ] Etichette per input e `aria-describedby`
+* [ ] Focus management per pagine modali/overlay
+* [ ] Contrasto e `prefers-reduced-motion`
+
+---
+
+## 14) Esempi Componenti UI pronti (starter)
+
+* `Card(title, *children)`
+* `Navbar(brand, links)`
+* `Button(variant="primary"|"ghost")`
+* `Form(model, on_submit)` con validazione lato server
+* `Table(data, columns, sortable=True)`
+* `Modal(title, *content)`
+* `ToastBus()` (server events)
+
+---
+
+## 15) Integrazioni opzionali
+
+* **Templates**: Jinja2
+* **Validation**: Pydantic v2 per request body/query
+* **Tasks**: APScheduler/RQ/Celery (plugin Jobs)
+* **Search**: Meilisearch/Whoosh
+* **Analytics**: endpoint server‑side + JS snippet
+
+---
+
+## 16) Licenza e Versioning
+
+* Licenza: MIT
+* SemVer: `MAJOR.MINOR.PATCH`
+* Supporto LTS opzionale per release chiave
+
+---
+
+## 17) Note di Implementazione
+
+* Generazione `elements/html_tags.py` da spec WHATWG.
+* Adapter Response: `Page -> HTMLResponse`, `dict -> JSONResponse`.
+* Diff/patch HTML opzionale via idratazione (fase 3), iniziare SSR puro.
+* Validazione attributi con mappatura `cls -> class` e filtri dataset `data-*`.
+* Logger strutturato con `contextvars` (request\_id, user\_id).
+
+---
+
+## 18) Check finale MVP
+
+* [ ] Boot ASGI (`app_instance = app`)
+* [ ] 2 rotte demo (GET, POST)
+* [ ] 1 modello ORM + migrazione
+* [ ] 1 componente UI + Page + CSS scoped
+* [ ] Static mount + CSP basica
+* [ ] CLI `new`, `dev`, `routes`
+* [ ] Test e2e + snapshot
+
+```
+```

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weblib-py"
+version = "0.1.10"
+description = "WebLib v2 – Minimal ASGI web library MVP per specifiche"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "WebLib Authors"}]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: MIT License",
+  "Framework :: AsyncIO",
+]
+
+[project.urls]
+Homepage = "https://example.local/weblib"
+
+[project.scripts]
+weblib = "weblib.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["weblib*"]
