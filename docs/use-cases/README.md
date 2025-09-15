@@ -8,4 +8,7 @@ Questi esempi mostrano come usare le API principali della libreria.
 4) `04_middleware_sessioni_cors.md` — Middleware, sessioni, CORS e logging
 5) `05_static_assets.md` — Servire asset statici
 6) `06_blog_auth_postgres.md` — Mini blog con registrazione/login e Postgres
-
+7) `07_db_integrazione_orm.md` — Integrazione database e note sull'ORM
+8) `08_orm_sqlite_adapter.md` — Adapter ORM SQLite incluso (CRUD completo)
+9) `09_orm_postgres_adapter.md` — Adapter ORM Postgres (asyncpg)
+10) `10_orm_mysql_adapter.md` — Adapter ORM MySQL (asyncmy/aiomysql)

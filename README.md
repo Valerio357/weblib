@@ -12,6 +12,7 @@ Caratteristiche implementate nell’MVP:
 - Static assets con mount semplice.
 - Middleware: `security_headers`, `request_id`, `logging_middleware`, `cors`, `rate_limit`, `sessions` (in-memory, dev-only).
 - CLI minimale (`weblib new`, `weblib dev`, `weblib routes`).
+- ORM: adapter `SQLiteORM` minimale con `fields` dichiarativi e CRUD base.
 
 Installazione locale:
 
@@ -74,7 +75,7 @@ asgi = app.asgi
 ```
 
 Note:
-- Questo è un MVP focalizzato sull’API e DX; molti aspetti (ORM, template, WS/SSE, middleware avanzati, sessioni, migrazioni) sono lasciati come stub per iterazioni future.
-- Nessuna dipendenza esterna; performance e sicurezza sono “best-effort” ragionevoli per dev.
+- Questo è un MVP focalizzato sull’API e DX; template, WS/SSE, plugin avanzati e migrazioni evolute sono previsti in future iterazioni.
+- Nessuna dipendenza esterna per l’ORM incluso (usa `sqlite3` standard via threadpool). Performance e sicurezza sono “best-effort” per dev.
 
 Licenza: MIT

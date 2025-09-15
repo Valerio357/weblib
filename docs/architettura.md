@@ -29,6 +29,13 @@ Moduli principali
 - `weblib.assets`:
   - `static.py`: server statico semplice, montato su prefisso (default `/static`).
 
+- `weblib.orm`:
+  - `protocol.py`: interfaccia `ORM`, `Model` e contratti base
+  - `fields.py`: factory per campi (`fields.Int/Str/Text/Bool/Datetime/ForeignKey`)
+  - `sqlite_impl.py`: adapter concreto `SQLiteORM` (CRUD base su SQLite)
+  - `postgres_impl.py`: adapter `PostgresORM` (richiede `asyncpg`)
+  - `mysql_impl.py`: adapter `MySQLORM` (richiede `asyncmy` o `aiomysql`)
+
 - `weblib.cli`:
   - `main.py`: CLI minima `weblib new/dev/routes`.
 
@@ -50,7 +57,7 @@ Mappa responsabilità
 
 Differenze rispetto alle specifiche complete
 
-- ORM/protocol, templates Jinja, WS/SSE e plugin avanzati sono fuori dall’MVP.
+- Templates Jinja, WS/SSE, plugin avanzati e migrazioni evolute sono fuori dall’MVP.
+- ORM: incluso `SQLiteORM` minimale; altri adapter (es. SQLAlchemy wrapper) fuori scope.
 - Sessioni sono in‑memory per sviluppo.
 - Dev server integrato non incluso; usare Uvicorn.
-
