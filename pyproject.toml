@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "weblib-py"
-version = "0.1.10"
+version = "0.1.12"
 description = "WebLib v2 – Minimal ASGI web library MVP per specifiche"
 readme = "README.md"
 requires-python = ">=3.11"

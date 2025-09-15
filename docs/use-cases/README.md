@@ -12,3 +12,4 @@ Questi esempi mostrano come usare le API principali della libreria.
 8) `08_orm_sqlite_adapter.md` — Adapter ORM SQLite incluso (CRUD completo)
 9) `09_orm_postgres_adapter.md` — Adapter ORM Postgres (asyncpg)
 10) `10_orm_mysql_adapter.md` — Adapter ORM MySQL (asyncmy/aiomysql)
+11) `11_auth.md` — Autenticazione: hashing, sessioni e require_login

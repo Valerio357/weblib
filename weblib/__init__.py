@@ -11,6 +11,14 @@ from .page.page import Page
 from .elements.core import E, Element, Component, Var
 from .css.css import CSS, css
 from .assets.static import Static
+from .auth import (
+    hash_password,
+    verify_password,
+    login_user,
+    logout_user,
+    current_user_id,
+    require_login,
+)
 
 __all__ = [
     "WebApp",
@@ -26,5 +34,10 @@ __all__ = [
     "CSS",
     "css",
     "Static",
+    "hash_password",
+    "verify_password",
+    "login_user",
+    "logout_user",
+    "current_user_id",
+    "require_login",
 ]
-

@@ -4,7 +4,7 @@ import os
 import secrets
 import asyncio
 from urllib.parse import parse_qs
-from hashlib import pbkdf2_hmac
+from weblib import hash_password, verify_password, login_user, logout_user, current_user_id, require_login
 
 from weblib import WebApp
 from weblib.routing import Routes, route, HTTP
@@ -66,22 +66,7 @@ def missing_db_page(title: str = "Database non configurato") -> Page:
     return Page(title=title, layout=layout).body(shell(title, card))
 
 
-def hash_password(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    digest = pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200_000)
-    return "pbkdf2$" + salt.hex() + "$" + digest.hex()
-
-
-def verify_password(password: str, stored: str) -> bool:
-    try:
-        algo, salt_hex, hash_hex = stored.split("$")
-        if algo != "pbkdf2":
-            return False
-        salt = bytes.fromhex(salt_hex)
-        digest = pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200_000)
-        return secrets.compare_digest(digest.hex(), hash_hex)
-    except Exception:
-        return False
+# Usa gli helper integrati in weblib.auth
 
 
 routes = Routes()
@@ -164,7 +149,7 @@ async def register_submit(req):
             row = await conn.fetchrow("insert into users(email, password_hash) values($1, $2) returning id", email, pwd)
         except Exception as e:
             return HTTP.html("<p>Email già registrata</p>", status=400)
-    req.state["session"]["user_id"] = row["id"]
+    login_user(req, row["id"])  # salva l'utente in sessione
     return HTTP.redirect("/posts")
 
 
@@ -192,13 +177,13 @@ async def login_submit(req):
         row = await conn.fetchrow("select id, password_hash from users where email=$1", email)
     if not row or not verify_password(password, row["password_hash"]):
         return HTTP.html("<p>Credenziali non valide</p>", status=401)
-    req.state["session"]["user_id"] = row["id"]
+    login_user(req, row["id"])  # salva l'utente in sessione
     return HTTP.redirect("/posts")
 
 
 @route.post("/logout")
 async def logout(req):
-    req.state.get("session", {}).pop("user_id", None)
+    logout_user(req)
     return HTTP.redirect("/")
 
 
@@ -240,8 +225,7 @@ async def list_posts(req):
 
 @route.post("/posts")
 async def create_post(req):
-    s = req.state.get("session", {})
-    user_id = s.get("user_id")
+    user_id = current_user_id(req)
     if not user_id:
         return HTTP.redirect("/login")
     raw = (await req.body()).decode("utf-8")
